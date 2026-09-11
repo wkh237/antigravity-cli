@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""
+CLI utility to send in-flight steering instructions to an active Antigravity session.
+Usage:
+  agy-steer "Please switch focus to router.tsx"
+  agy-steer --abort "Stop what you're doing and run tests"
+  agy-steer --status
+"""
+
+import sys
+import os
+import json
+import argparse
+import time
+
+QUEUE_DIR = "/tmp/agy_steering"
+os.makedirs(QUEUE_DIR, exist_ok=True)
+
+def get_active_session() -> str:
+    path = os.path.join(QUEUE_DIR, "active_session.txt")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return "default"
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Send in-flight steering directives to Antigravity Agent"
+    )
+    parser.add_argument(
+        "directive",
+        nargs="?",
+        help="The instruction to steer the agent with"
+    )
+    parser.add_argument(
+        "--abort",
+        action="store_true",
+        help="Immediately abort currently running tool execution and redirect"
+    )
+    parser.add_argument(
+        "--conversation-id",
+        help="Target specific conversation ID (defaults to active session)"
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show active session and pending steering queues"
+    )
+
+    args = parser.parse_args()
+
+    if args.status:
+        active = get_active_session()
+        print(f"Active Conversation: {active}")
+        queues = os.listdir(QUEUE_DIR)
+        print("Queue files:")
+        for q in queues:
+            p = os.path.join(QUEUE_DIR, q)
+            print(f"  - {q} ({os.path.getsize(p)} bytes)")
+        return
+
+    if not args.directive:
+        parser.print_help()
+        sys.exit(1)
+
+    conv_id = args.conversation_id or get_active_session()
+
+    payload = {
+        "directive": args.directive,
+        "abort_tool": args.abort,
+        "timestamp": time.time(),
+        "conversation_id": conv_id
+    }
+
+    # Write to conversation-specific queue and latest queue
+    targets = [os.path.join(QUEUE_DIR, "latest.json")]
+    if conv_id and conv_id != "default":
+        targets.append(os.path.join(QUEUE_DIR, f"{conv_id}.json"))
+
+    for target in targets:
+        with open(target, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    mode_str = "ABORT & STEER" if args.abort else "STEER"
+    print(f"✓ [{mode_str}] Sent steering directive to session '{conv_id}':")
+    print(f"  \"{args.directive}\"")
+
+if __name__ == "__main__":
+    main()
