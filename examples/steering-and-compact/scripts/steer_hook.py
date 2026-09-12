@@ -68,8 +68,19 @@ def handle_pre_tool_use(payload: dict):
         }))
         return
 
+    # 2. Model-driven Auto-Approval Guard
+    # Evaluates commands with evaluator model to decide allow vs ask
+    if os.environ.get("ENABLE_MODEL_GUARD", "1") == "1" and tool_name in ["run_command", "bash", "execute_command"]:
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import model_security_guard
+            guard_result = model_security_guard.evaluate_tool_call(payload)
+            print(json.dumps(guard_result))
+            return
+        except Exception as e:
+            sys.stderr.write(f"Model guard evaluation warning: {e}\n")
+
     # If steering is queued without aborting the current tool, allow tool to finish.
-    # It will be picked up at PreInvocation or appended to PostToolUse.
     print(json.dumps({
         "decision": "allow"
     }))

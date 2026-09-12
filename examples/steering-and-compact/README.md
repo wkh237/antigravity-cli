@@ -47,16 +47,37 @@ examples/steering-and-compact/
 ├── bin/
 │   └── agy-steer                  # Command-line utility to send steering directives
 ├── skills/
+│   ├── steer_hook.py              # Hook runner for Steering & Auto-Approval Guard
+│   └── model_security_guard.py    # Model-driven evaluator (Gemini/Claude/OpenAI/Ollama)
+├── bin/
+│   └── agy-steer                  # Command-line utility to send steering directives
+├── skills/
 │   └── compact/
 │       └── SKILL.md               # /compact skill definition and compaction workflow
 ├── tests/
-│   └── test_steering_hook.py      # Automated unit tests
+│   ├── test_steering_hook.py      # Automated unit tests for Steering
+│   └── test_model_guard.py        # Automated unit tests for Model Guard
 └── README.md
 ```
 
 ---
 
-## 3. How to Use in Your Workspace
+## 3. Model-Driven Security Guard (No Whitelist Required)
+
+Like Claude Code and Codex, `model_security_guard.py` evaluates every `run_command` via a lightweight evaluator model:
+- **Zero Whitelists**: 100% semantic reasoning of developer intent and risk.
+- **Auto-Approval (`allow`)**: Safe dev activities (compile, test, lint, view git diff, clean build folders).
+- **Interactive Escalation (`ask`)**: High-risk activities (destructive code deletion, force pushes, accessing ssh secrets).
+- **Supported Evaluator Backends**:
+  - `GEMINI_API_KEY`: Ultra-fast `gemini-2.5-flash-lite` (~200ms latency).
+  - `ANTHROPIC_API_KEY`: `claude-3-5-haiku-20241022` (identical to Claude Code).
+  - `OPENAI_API_KEY`: `gpt-4o-mini` (identical to Codex).
+  - `OLLAMA_HOST`: Local offline model (e.g. `qwen2.5-coder:1.5b` or `llama3.2:1b`).
+  - Fallback: Native `agy --print` using your existing login.
+
+---
+
+## 4. How to Use in Your Workspace
 
 ### Step 1: Enable Hooks and Skills in your Project
 To enable this in your current workspace, link or copy the configuration into your project's `.agents` directory:
@@ -64,8 +85,8 @@ To enable this in your current workspace, link or copy the configuration into yo
 ```bash
 mkdir -p .agents/scripts .agents/skills/compact
 cp examples/steering-and-compact/hooks.json .agents/hooks.json
-cp examples/steering-and-compact/scripts/steer_hook.py .agents/scripts/steer_hook.py
-chmod +x .agents/scripts/steer_hook.py
+cp examples/steering-and-compact/scripts/* .agents/scripts/
+chmod +x .agents/scripts/*.py
 cp examples/steering-and-compact/skills/compact/SKILL.md .agents/skills/compact/SKILL.md
 ```
 
@@ -92,8 +113,9 @@ The agent activates the compaction skill, creating a structured context artifact
 
 ---
 
-## 4. Running the Tests
+## 5. Running the Tests
 
 ```bash
+python3 examples/steering-and-compact/tests/test_model_guard.py
 python3 examples/steering-and-compact/tests/test_steering_hook.py
 ```
