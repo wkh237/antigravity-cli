@@ -26,6 +26,57 @@ def get_active_session() -> str:
             pass
     return "default"
 
+def send_directive(directive: str, abort: bool, conv_id: str):
+    payload = {
+        "directive": directive,
+        "abort_tool": abort,
+        "timestamp": time.time(),
+        "conversation_id": conv_id
+    }
+
+    targets = [os.path.join(QUEUE_DIR, "latest.json")]
+    if conv_id and conv_id != "default":
+        targets.append(os.path.join(QUEUE_DIR, f"{conv_id}.json"))
+
+    for target in targets:
+        with open(target, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    mode_str = "ABORT & STEER" if abort else "STEER"
+    print(f"✓ [{mode_str}] Sent directive to session '{conv_id}':")
+    print(f"  \"{directive}\"")
+
+def interactive_mode(conv_id: str):
+    print("=" * 64)
+    print(f"🎮 Antigravity In-Flight Steering Controller")
+    print(f"Target Session: {conv_id}")
+    print("-" * 64)
+    print("Instructions:")
+    print("  • Type any instruction and press [Enter] to steer the agent.")
+    print("  • Prefix with '!' (e.g. !stop) to IMMEDIATELY ABORT running tool.")
+    print("  • Type 'exit', 'quit', or Ctrl+C to leave.")
+    print("=" * 64)
+
+    while True:
+        try:
+            line = input("\n[steer] > ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting steering controller.")
+            break
+
+        if not line:
+            continue
+        if line.lower() in ["exit", "quit", "q"]:
+            print("Exiting.")
+            break
+
+        abort = False
+        if line.startswith("!"):
+            abort = True
+            line = line[1:].strip()
+
+        send_directive(line, abort=abort, conv_id=conv_id)
+
 def main():
     parser = argparse.ArgumentParser(
         description="Send in-flight steering directives to Antigravity Agent"
@@ -33,7 +84,7 @@ def main():
     parser.add_argument(
         "directive",
         nargs="?",
-        help="The instruction to steer the agent with"
+        help="The instruction to steer the agent with (or omit to enter interactive mode)"
     )
     parser.add_argument(
         "--abort",
@@ -62,31 +113,14 @@ def main():
             print(f"  - {q} ({os.path.getsize(p)} bytes)")
         return
 
-    if not args.directive:
-        parser.print_help()
-        sys.exit(1)
-
     conv_id = args.conversation_id or get_active_session()
 
-    payload = {
-        "directive": args.directive,
-        "abort_tool": args.abort,
-        "timestamp": time.time(),
-        "conversation_id": conv_id
-    }
+    # If no directive provided, launch interactive REPL mode!
+    if not args.directive:
+        interactive_mode(conv_id)
+        return
 
-    # Write to conversation-specific queue and latest queue
-    targets = [os.path.join(QUEUE_DIR, "latest.json")]
-    if conv_id and conv_id != "default":
-        targets.append(os.path.join(QUEUE_DIR, f"{conv_id}.json"))
-
-    for target in targets:
-        with open(target, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
-
-    mode_str = "ABORT & STEER" if args.abort else "STEER"
-    print(f"✓ [{mode_str}] Sent steering directive to session '{conv_id}':")
-    print(f"  \"{args.directive}\"")
+    send_directive(args.directive, abort=args.abort, conv_id=conv_id)
 
 if __name__ == "__main__":
     main()
